@@ -11,9 +11,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sympy.solvers import solve
 from sympy import Symbol, cos
-import sys 
-import os
-sys.path.append(os.path.abspath('/home/fquinton/Documents/stage_cell'))
 import rendering_functions as rdr
 
 
