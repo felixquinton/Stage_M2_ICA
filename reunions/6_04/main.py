@@ -40,14 +40,12 @@ Also try:
 import cv2 as cv
 import numpy as np
 from matplotlib import pyplot as plt
-from sympy.solvers import solve
-from sympy import Symbol, cos
 import rendering_functions as rdr
 from scipy.spatial.distance import cosine
 
 
 """
-Créer une image de cellule
+Create a cell image
 """
 def cart2pol(x, y):
     rho = np.sqrt(x**2 + y**2)
@@ -60,27 +58,18 @@ def pol2cart(rho, phi):
     return x, y
 
 
-# those should be arguments of the function
-rads = np.arange(0, (np.pi/2.0), 0.01)
-rd = 1 # What's rd?
-zeros = np.zeros((200,200,3),
-                 dtype=np.uint8)
-r = Symbol('r')
-theta = Symbol('theta')
-cpt = 0 # what's cpt
-#boucle sur l'angle
-
-def create_cell():
+def createCell(rads, zeros):
     rd = 1
+    cpt = 0 # cpt is a randomly initiated countdown determining where to draw a cell nucleus
     for radian in rads:
 
-        #condition pour fermer la membrane
+        #condition to close the membrane
         if radian >= np.pi/2.0-0.05 :
             if rd > abs(radian - np.pi/2.0) + 1 or rd < -abs(radian - np.pi/2.0) + 1 :
                 if rd > 1 : rd = 1+np.pi/2.0-radian
                 else : rd = 1-np.pi/2.0+radian
-        #résolution de l'équation pour déterminer les coordonnées polaires du point du cercle
-        x, y = pol2cart(solve(r-2*rd*30*np.sqrt(2)*cos(radian-np.pi/4.0))[0],radian)
+        #solving the equation to determine the coordinate of the point
+        x, y = pol2cart(2*rd*30*np.sqrt(2)*np.cos(radian-np.pi/4.0),radian)
         x += 70
         y += 70
 
@@ -91,57 +80,57 @@ def create_cell():
         #coloriage
         # Look at slicing in numpy
         # https://docs.scipy.org/doc/numpy-dev/user/quickstart.html#indexing-with-arrays-of-indices
-        zeros[x-1: x+1][y-1: y+1] = [255, 0, 0]
+        zeros[x-1: x+1,y-1: y+1] = [255, 0, 0]
 
-        #on prend son symétrique pour aller plus vite en ne faisant que la moitié du cercle
+        #taking the symetric of the current point so that we draw only half of the circle
         s_x = 200-x
         s_y = 200-y
-        #coloriage
-        zeros[s_x-1: s_x+1][s_y-1: s_y+1] = [255, 0, 0]
+        #coloring
+        zeros[s_x-1: s_x+1,s_y-1: s_y+1] = [255, 0, 0]
 
-        #on fait pareil pour la membrane extérieure
-        xx,yy = pol2cart(solve(r-2*rd*60* np.sqrt(2)
-                               * cos(radian - np.pi/4.0))[0],
+        #doing the same for the external membrane
+        xx,yy = pol2cart(2*rd*60* np.sqrt(2)
+                               * np.cos(radian - np.pi/4.0),
                          radian)
         xx += 40
         yy += 40
         xx = int(round(xx))
         yy = int(round(yy))
-        zeros[xx-1: xx+1][yy-1: yy+1] = [255, 0, 0]
+        zeros[xx-2: xx+2,yy-2: yy+2] = [255, 0, 0]
 
-        #coloriage
+        #coloring
         s_xx = 200-xx
         s_yy = 200-yy
-        #coloriage
-        zeros[s_xx-1: s_xx+1][s_yy-1: s_yy+1] = [255, 0, 0]
+        #coloring
+        zeros[s_xx-2: s_xx+2,s_yy-2: s_yy+2] = [255, 0, 0]
 
-        #on relance la marche aléatoire à chaque itération
+        #updating the random walk
         rd = min(1.08, max(0.92, rd+0.01*(-1+2*(0.5>np.random.rand()))))
-        #création d'un noyau
+        #creating a nucleus
         if cpt == 0:
             center_x = (x + xx) // 2
-            center_x = (y + yy) // 2
-            #coloriage
-            zeros[center_x-2: center_x+2][center_y-2: center_y+2]
-            #symétrique
-            zeros[200-center_x-2: 200-center_y-2][200-center_y-2: 200-center_y+2] = [0, 0, 255]
-            #relance du cpt pour déterminer où sera le prochain noyau
+            center_y = (y + yy) // 2
+            #coloring
+            zeros[center_x-2: center_x+2,center_y-2: center_y+2] = [0,0,255]
+            #symetric
+            zeros[200-center_x-2: 200-center_x+2,200-center_y-2: 200-center_y+2] = [0, 0, 255]
+            #randomly choosing where the next nucleus will be
             cpt = np.random.randint(10,15)
-        cpt -= 1 # ?
+        cpt -= 1
+    return(zeros)
 
-"""
-create_cell()
-#enregistrement
-plt.axis('off')
-plt.imshow(zeros, origin=0)
-plt.savefig('seek4.png')
-"""
-#récupération avec opencv
+#imgCell = createCell(np.arange(0, (np.pi/2.0), 0.01), np.zeros((200,200,3), dtype=np.uint8))
+#saving
+#plt.axis('off')
+#plt.imshow(imgCell, origin=0)
+#plt.savefig('seek4.png')
+
+#import data with opencv
 img = cv.imread('seek4.png')
 
 
 """
-traitement des pixels rouges = membrane
+red pixels = membrane
 """
 img_red = rdr.isolate_color(img,[0, 0, 255])
 
@@ -149,65 +138,65 @@ img_red = rdr.isolate_color(img,[0, 0, 255])
 # channels - colors are really just for convenience
 # so, instead of the isolate_color code
 # you can simply use the grey level channel
+
+"""
+not working
 img_red = img[:, 0]
+"""
 
 red_cont, red_hier = rdr.find_contours(img_red,0)
 
-ouside = [contour for contour, hierarchy
-          in zip(red_cont[0], red_hier[0])
-          if hierarchy[3] == 0]
+outside = [contour for contour, hierarchy
+          in zip(red_cont, red_hier[0])
+          if hierarchy[3] == 0][0]
 
-# I leace the remaining range(len()) to be removed as an exercise
 
-inside = [red_cont[i] for i in range(len(red_hier[0])) if red_hier[0][i][3]==2]
+inside = [contour for contour, hierarchy
+          in zip(red_cont, red_hier[0])
+          if hierarchy[3] == 2][0]
+
 
 cv.drawContours(img_red, outside, -1, [255, 0, 0],1)
 cv.drawContours(img_red, inside, -1, [255, 0, 0],1)
 
-outside = [list(outside[0][i][0]) for i in range(len(outside[0]))]
-inside = [list(inside[0][i][0]) for i in range(len(inside[0]))]
-(o_x,o_y), o_radius = cv.minEnclosingCircle(np.array(outside))
-(i_x,i_y), i_radius = cv.minEnclosingCircle(np.array(inside))
+(o_x,o_y), o_radius = cv.minEnclosingCircle(outside)
+(i_x,i_y), i_radius = cv.minEnclosingCircle(inside)
 
 """
-traitement des pixels bleus = noyau
+blue pixels = nuclei
 """
 img_blu = rdr.isolate_color(img,[255, 0, 0])
 blu_cont, blu_hier = rdr.find_contours(img_blu,0)
-ell = rdr.fitEllipse(img_blu,0,0)
-nuc_center = [ell[i][0] for i in ell]
+ellipses = rdr.fitEllipse(img_blu,0,0)
+centers = [ellipses[i][0] for i in ellipses]
 
-for e in ell:
-    cv.ellipse(img, ell[e], [np.random.randint(0,256),
+for ellipse in ellipses:
+    cv.ellipse(img, ellipses[ellipse], [np.random.randint(0,256),
                              np.random.randint(0,256),
                              np.random.randint(0,256)], 2)
 
-for i in nuc_center:
-    cv.circle(img,(int(i[0]),int(i[1])),1,(0,255,0),1)
+for center in centers:
+    cv.circle(img,(int(center[0]),int(center[1])),1,(0,255,0),1)
 
 """
-Calcul de l'angle entre deux noyau pour trouver la bissectrice
+Computing the angle between two nuclei to find the bissectrix
 """
 
-#calcul l'angle à l'origine entre deux points
+#Computing the angle between two points
 def angle(v, w):
-    # This was far too hard to read
-    # you can simplify by refactoring:
-    # Where are o_x and o_y defined?
+    # o_x and o_y are the coordinates of the center of the minimum enclosing circle
     v = np.asarray(v) - np.array([o_x, o_y])
     w = np.asarray(w) - np.array([o_x, o_y])
-    cos_dist = (v * w).sum() / (np.linalg.norm(v) * np.linalg.norm(w))
+    cos_dist = np.dot(v,w) / (np.sqrt(v[0]**2+v[1]**2)*np.sqrt(w[0]**2+w[1]**2))
 
     ## BTW This is implemented in scipy as the cosine distance
-    cos_dist = cosine(v, w)
+    #cos_dist = cosine(v, w)
     rad = np.arccos(cos_dist)
     return rad
 
 
-#calcul du noyau le plus proche pour chaque noyau (dans le sens des aiguilles d'une montre)
-def voisins(list):
-    # list is a reserved word, you should _not_ use it as
-    # a variable name!!
+#Computing the nearest clockwise neighbouring nucleus 
+def findNeighbor(cells):
     res = {}
     # nested loops are bad and should be avoided
     # you can look into np.meshgrid to have a flat iterator
@@ -218,69 +207,63 @@ def voisins(list):
     # KDTree neighbor finding structure
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.cKDTree.html
 
-    for i in list:
+    for i in cells:
         ii = (i[0]-o_x,i[1]-o_y)
         min1 = 10**6
         argmin1 = -1
-        for j in list:
+        for j in cells:
             jj = (j[0]-o_x,j[1]-o_y)
             if not ii[0]==jj[0] and not ii[1]==jj[1]:
                 if ii[0]*jj[1]-ii[1]*jj[0] > 0 and np.sqrt((ii[0]-jj[0])**2+(ii[1]-jj[1])**2)<min1:
                     min1 = np.sqrt((ii[0]-jj[0])**2+(ii[1]-jj[1])**2)
                     argmin1 = j
         res[i] = argmin1
-    return(res)
+    return res
 
-voisin = voisins(nuc_center)
-tmp_vt = {}
-
-# I usually defined lists variables with an 's' ath the
-# end of the name, so that we now it's a collection
-# so `voisin` should be named `neighbors`
-# and you can do
-# for neighbor in neighbors:
-#     ...
+neighbors = findNeighbor(centers)
 
 # You can try to refactor the remaining code
 # by putting everything in functions, and try to
 # facor as much of it as possible and make it more legible
 
+    
+def find2FirstVertices(cell):
+    #Compute the cutting angle
+    cutAngle = angle(cell,neighbors[cell])/2.0
+    #Compute the cell coordinate with respect to the center of the minimum enclosing circle
+    aa_x, aa_y = (cell[0]-o_x,cell[1]-o_y)
+    #Finding a point on the bissectrix
+    newPoint = (aa_x * np.cos(cutAngle) - aa_y * np.sin(cutAngle),
+                     aa_x * np.sin(cutAngle) + aa_y * np.cos(cutAngle))
+    #Compute the new point coordinates wrt the origin
+    newPoint = (newPoint[0] + o_x, newPoint[1] + o_y)
+    #We have everything needed to compute the intersection points between the circles and the bissectrix :
+    #Intersection point on the inside boundary
+    distance = np.sqrt((newPoint[0]-i_x)**2+(newPoint[1]-i_y)**2)
+    coefCos, coefSin = ((i_radius/(distance))*(cell[0]-i_x),
+                        (i_radius/(distance))*(cell[1]-i_y))
+    #Coordinate with respect to the center of the minimum enclosing circle
+    innerVTPoint = (coefCos*np.cos(cutAngle)-coefSin*np.sin(cutAngle),
+                    coefCos*np.sin(cutAngle)+coefSin*np.cos(cutAngle))
+    #Retrieve the coordinates wrt the origin
+    innerVTPoint = (innerVTPoint[0]+i_x,innerVTPoint[1]+i_y)
+    #Intersection point on the outside boundary
+    distance = np.sqrt((newPoint[0]-o_x)**2+(newPoint[1]-o_y)**2)
+    coefCos, coefSin = ((o_radius/(distance))*(cell[0]-o_x),
+                        (o_radius/(distance))*(cell[1]-o_y))
+    outerVTPoint = (coefCos*np.cos(cutAngle)-coefSin*np.sin(cutAngle),
+                    coefCos*np.sin(cutAngle)+coefSin*np.cos(cutAngle))
+    outerVTPoint = (outerVTPoint[0]+o_x,outerVTPoint[1]+o_y)
+    
+    return [innerVTPoint,outerVTPoint]
 
-for a in voisin:
-    #on récupère l'angle pour former la bissectrice
-    angle_to_cut = angle(a,voisin[a])
-    m_angle = angle_to_cut/2.0
-    #on récupère les coordonnées de a par rapport au centre de l'organoïde
-    aa_x, aa_y = (a[0]-o_x,a[1]-o_y)
-    #on trouve les coordonnées d'un point pour définir la bissectrice
-    new_point_tmp = (aa_x * np.cos(m_angle) - aa_y * np.sin(m_angle),
-                     aa_x * np.sin(m_angle) + aa_y * np.cos(m_angle))
-    #on récupère les coordonnées du nouveau point par rapport à l'origine
-    new_point = (new_point_tmp[0] + o_x, new_point_tmp[1] + o_y)
-    #on calcule les points d'intersection entre la bissectrice et les frontières de l'organoïde
-    ## Exercice : make this legible ;)
-    #inside
-    d = np.sqrt((new_point[0]-i_x)**2+(new_point[1]-i_y)**2)
-    i_b_x, i_b_y = ((i_radius/(d))*(a[0]-i_x),(i_radius/(d))*(a[1]-i_y))
-    n_p_i = (i_b_x*np.cos(m_angle)-i_b_y*np.sin(m_angle),i_b_x*np.sin(m_angle)+i_b_y*np.cos(m_angle))
-    n_p_i = (n_p_i[0]+i_x,n_p_i[1]+i_y)
-    #outside
-    d = np.sqrt((new_point[0]-o_x)**2+(new_point[1]-o_y)**2)
-    o_b_x, o_b_y = ((o_radius/(d))*(a[0]-o_x),(o_radius/(d))*(a[1]-o_y))
-    n_p_o = (o_b_x*np.cos(m_angle)-o_b_y*np.sin(m_angle),o_b_x*np.sin(m_angle)+o_b_y*np.cos(m_angle))
-    n_p_o = (n_p_o[0]+o_x,n_p_o[1]+o_y)
-
-    tmp_vt[a] = [n_p_i,n_p_o]
-
-
-
-ttmp_vt = {}
-for a in voisin:
-    ttmp_vt[a] = tmp_vt[voisin[a]]
-#on sauvegarde quatres points par noyau pour la VT
 VT = {}
-for a in voisin :
-    VT[a] = [i for i in tmp_vt[a]+ttmp_vt[a]]
+
+for neighbor in neighbors:
+    VT[neighbor] = find2FirstVertices(neighbor)
+for neighbor in neighbors:
+    VT[neighbor].append(VT[neighbors[neighbor]][0])
+    VT[neighbor].append(VT[neighbors[neighbor]][1])
 
 
 """
@@ -292,29 +275,43 @@ def display():
     k = cv.waitKey(0)
     if k == 27:         # wait for ESC key to exit
         cv.destroyAllWindows()
-    #cercles
+    #Minimum enclosing circles
     cv.circle(image0,(int(o_x),int(o_y)),int(o_radius),(0,255,0),2)
     cv.circle(image0,(int(i_x),int(i_y)),int(i_radius),(0,255,0),2)
     cv.imshow('cell with minimum enclosing circles',image0)
     k = cv.waitKey(0)
     if k == 27:         # wait for ESC key to exit
         cv.destroyAllWindows()
-    #bissectrices
-    for a in voisin:
-        cv.circle(image0,(int(round(VT[a][0][0])),int(round(VT[a][0][1]))),2,[255,255,0],1)
-        cv.circle(image0,(int(round(VT[a][1][0])),int(round(VT[a][1][1]))),2,[255,255,0],1)
+    #Bissectrix
+    for neighbor in neighbors:
+        cv.circle(image0,(int(round(VT[neighbor][0][0])),
+                          int(round(VT[neighbor][0][1]))),2,[255,255,0],1)
+        cv.circle(image0,(int(round(VT[neighbor][1][0])),
+                          int(round(VT[neighbor][1][1]))),2,[255,255,0],1)
         #cv.circle(img,(int(round(new_point[0])),int(round(new_point[1]))),2,[255,255,0],1)
-        cv.line(image0,(int(round(VT[a][1][0])),int(round(VT[a][1][1]))),(int(round(o_x)),int(round(o_y))),[255,255,0],1)
+        cv.line(image0,(int(round(VT[neighbor][1][0])),
+                        int(round(VT[neighbor][1][1]))),(
+                                int(round(o_x)),
+                                int(round(o_y))),[255,255,0],1)
     cv.imshow('cell with bisectrix',image0)
     k = cv.waitKey(0)
     if k == 27:         # wait for ESC key to exit
         cv.destroyAllWindows()
-    #VT
+    #Voronoi tesselation
     image1 = img.copy()
-    for a in VT:
-        cv.line(image1,(int(round(VT[a][0][0])),int(round(VT[a][0][1]))),(int(round(VT[a][1][0])),int(round(VT[a][1][1]))),[255,255,255],1)
-        cv.line(image1,(int(round(VT[a][0][0])),int(round(VT[a][0][1]))),(int(round(VT[a][2][0])),int(round(VT[a][2][1]))),[255,255,255],1)
-        cv.line(image1,(int(round(VT[a][1][0])),int(round(VT[a][1][1]))),(int(round(VT[a][3][0])),int(round(VT[a][3][1]))),[255,255,255],1)
+    for neighbor in neighbors:
+        cv.line(image1,(int(round(VT[neighbor][0][0])),
+                        int(round(VT[neighbor][0][1]))),(
+                                int(round(VT[neighbor][1][0])),
+                                int(round(VT[neighbor][1][1]))),[255,255,255],1)
+        cv.line(image1,(int(round(VT[neighbor][0][0])),
+                        int(round(VT[neighbor][0][1]))),(
+                                int(round(VT[neighbor][2][0])),
+                                int(round(VT[neighbor][2][1]))),[255,255,255],1)
+        cv.line(image1,(int(round(VT[neighbor][1][0])),
+                        int(round(VT[neighbor][1][1]))),(
+                                int(round(VT[neighbor][3][0])),
+                                int(round(VT[neighbor][3][1]))),[255,255,255],1)
 
     cv.imshow('cell with VT',image1)
     k = cv.waitKey(0)
@@ -324,33 +321,32 @@ def display():
 display()
 
 """
-Vérifier si les cellules sont polarisées en mesurant leur distance à la frontière basale et à la
-la frontière apicale
+Check if the cells are polarised by computing the distance from their nucleus to their boundaries
 """
-#d1 et d2 sont les points qui définissent la droite en 2D. a est le point dont on calcule le projeté
+#d1 and d2 are the points defining the boundary. a is the point to project  on (d1,d2)
 def orthoProj2D(d1,d2,a):
     X = ((d2[0]-d1[0])*(a[0]-d2[0])+(d2[1]-d1[1])*(a[1]-d2[1]))/((d2[0]-d1[0])**2+(d2[1]-d1[1])**2)
     res = (d2[0]+(d2[0]-d1[0])*X,d2[1]+(d2[1]-d1[1])*X)
-    return(res)
+    return res
 image1 = img.copy()
 
 isPolar = {}
 dicOrthProj = {}
 
-for c in nuc_center:
-    p_i = orthoProj2D(VT[c][0],VT[c][2],c)
+for center in centers:
+    p_i = orthoProj2D(VT[center][0],VT[center][2],center)
     #cv.circle(image1,(int(round(p_i[0])),int(round(p_i[1]))),2,[255,255,0],1)
-    p_o = orthoProj2D(VT[c][1],VT[c][3],c)
+    p_o = orthoProj2D(VT[center][1],VT[center][3],center)
     cv.circle(image1,(int(round(p_o[0])),int(round(p_o[1]))),2,[255,255,0],1)
-    d_i = np.sqrt((p_i[0]-c[0])**2+(p_i[1]-c[1])**2)
-    d_o = np.sqrt((p_o[0]-c[0])**2+(p_o[1]-c[1])**2)
-    isPolar[c] = (d_i>d_o)
-    dicOrthProj[c] = (p_i,p_o)
+    d_i = np.sqrt((p_i[0]-center[0])**2+(p_i[1]-center[1])**2)
+    d_o = np.sqrt((p_o[0]-center[0])**2+(p_o[1]-center[1])**2)
+    isPolar[center] = (d_i>d_o)
+    dicOrthProj[center] = (p_i,p_o)
 
-print("Proportion de noyau plus proche de l'extérieur = ", sum([isPolar[i] for i in isPolar])/len(isPolar))
+print("Proportion of nuclei closest to the outside = ", sum([isPolar[i] for i in isPolar])/len(isPolar))
 
 """
-Calculer l'orientation du noyau des cellules par rapport à la frontière extérieure
+Compute the orientation of the nuclei wrt the outer boundary
 """
 
 #for c in ell :
