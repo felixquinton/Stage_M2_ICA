@@ -28,11 +28,6 @@ import tyssueMissing
 from tyssue.solvers.sheet_vertex_solver import Solver as solver
 import time
 
-"""
-
-PB : find_energy_min is too slow (between 1s and 8s)
-
-"""
 path = '../images/seek4.png'
 imgData = iP.dataImg(path)
 
@@ -111,9 +106,6 @@ start = time.clock()
 L = np.random.rand(len(organo.edge_df.line_tension))*0.001
 D = distance(L)
 
-bnds = [(0, None)]*len(organo.edge_df.line_tension)
-
-precision = np.ones(len(L))*10**(-5)
 previousStepSize = 10**6
 cpt = 0
 incumbent = 10**6
