@@ -87,7 +87,11 @@ def distance(L):
 def grad(L,D):
     h = np.array([10**(-6)]*len(L))
     hL = [np.array(L) + np.array([(j==i)*10**(-6) for j in range(len(L))]) for i in range(len(L))]
-    df = np.array([distance(i) for i in hL]) - np.array([D]*len(L))
+    start = time.clock()
+    df = np.array([distance(i) for i in hL[:int(0.75*len(L))]]) - np.full(int(0.75*len(L)),D)
+    df = np.concatenate([df,np.roll(df[int(0.5*len(L)):len(df)],-1)])
+    elapsed = time.clock()-start
+    print(elapsed)
     res = np.divide(df,h)
     return res
     
