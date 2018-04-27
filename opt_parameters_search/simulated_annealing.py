@@ -130,8 +130,11 @@ class Etat:
     
     def alternative_neigthbor(self):
         self.old_index = {}
-        moving_indices = np.random.randint(0,2,DIMENSION)
-        for indice in np.where(moving_indices == 1)[0]:
+        nonLateral = np.random.randint(0,2,int(DIMENSION/2))
+        lateral = np.random.randint(0,2,int(DIMENSION/4))
+        lateral = np.concatenate([lateral,np.roll(lateral,-1)])
+        movingIndices = np.concatenate([nonLateral, lateral])
+        for indice in np.where(movingIndices == 1)[0]:
             self.old_index[indice] = self.vecteur[indice]
             randDIR = 1 - 2*(np.random.rand()>0.5)
             self.vecteur[indice] = max(0,self.vecteur[indice] + 0.001*randDIR)

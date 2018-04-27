@@ -97,7 +97,10 @@ Nesterov's accelerated gradient descent.
 start = time.clock()
 lamb = 0
 gamma = 1
-L = np.random.rand(len(organo.edge_df.line_tension))*0.001
+nonLateral = np.random.rand(int(len(organo.edge_df.line_tension)/2))*0.001
+lateral = np.random.rand(int(len(organo.edge_df.line_tension)/4))*0.001
+lateral = np.concatenate([lateral,np.roll(lateral,-1)])
+L = np.concatenate([nonLateral, lateral])
 y = L
 D = distance(L)
 
@@ -115,7 +118,7 @@ while previousStepSize > 10**(-5) and incumbent > 0:
     L = np.maximum((1-gamma)*y+gamma*previousY,np.zeros(len(L)))
     D = distance(L)
     previousStepSize = abs(D - incumbent)
-    print(f'Itération : {cpt-1} \n Distance : {D}')
+    #print(f'Itération : {cpt-1} \n Distance : {D}')
     incumbent = D
 optL = L
 elapsed = time.clock()-start

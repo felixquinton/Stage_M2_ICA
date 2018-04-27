@@ -103,7 +103,10 @@ def grad(L,D):
 Gradient descent : faster than  simulated annealing.
 """
 start = time.clock()
-L = np.random.rand(len(organo.edge_df.line_tension))*0.001
+nonLateral = np.random.rand(int(len(organo.edge_df.line_tension)/2))*0.001
+lateral = np.random.rand(int(len(organo.edge_df.line_tension)/4))*0.001
+lateral = np.concatenate([lateral,np.roll(lateral,-1)])
+L = np.concatenate([nonLateral, lateral])
 D = distance(L)
 
 previousStepSize = 10**6
