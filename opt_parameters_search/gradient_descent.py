@@ -4,7 +4,6 @@
 Created on Wed Apr 25 16:07:34 2018
 
 @author: fquinton
-
 """
 
 import numpy as np
@@ -42,6 +41,7 @@ organo = tyssueMissing.generate_ring(Nf, R_in, R_out)
 organo.vert_df.loc[organo.apical_verts, organo.coords] = inner_vs
 organo.vert_df.loc[organo.basal_verts, organo.coords] = outer_vs
 
+PlanarGeometry.update_all(organo)
 
 # Construction of the model
 model = factory.model_factory(
@@ -71,33 +71,30 @@ Y = np.column_stack([organo.vert_df.x, organo.vert_df.y])
 minimize_opt = {'options':{'gtol':0.001,
                            'ftol':0.01}}
 
-def distance(L, startOrgano):   
+def distance(L):   
     #initialising the mesh
     tmpOrgano = organo.copy()
     tmpOrgano.edge_df.line_tension = L
-    tmpOrgano.vert_df.x = startOrgano.vert_df.x
-    tmpOrgano.vert_df.y = startOrgano.vert_df.y
-    print(tmpOrgano.vert_df.x.head())
     solver.find_energy_min(tmpOrgano,
                              PlanarGeometry,
                             model,
                             minimize = minimize_opt)
     X = np.column_stack([tmpOrgano.vert_df.x, tmpOrgano.vert_df.y])
     D = np.sum(np.linalg.norm((X-Y), axis = 1))
-    return D, tmpOrgano.copy()
+    return D
 
 
-def grad(L,D, startOrgano):
+def grad(L,D):
     h = np.array([10**(-6)]*len(L))
-    hL = [np.array(L) + np.array([(j==i)*10**(-6) for j in range(len(L))]) for i in range(len(L))]
+    hL = np.tile(L,(4*Nf,1)) + np.eye(4*Nf)*10**(-6)
     start = time.clock()
-    df = np.array([distance(i, startOrgano)[0] for i in hL[:int(0.75*len(L))]]) - np.full(int(0.75*len(L)),D)
+    df = np.array([distance(i) for i in hL[:int(0.75*len(L))]]) - np.full(int(0.75*len(L)),D)
     df = np.concatenate([df,np.roll(df[int(0.5*len(L)):len(df)],-1)])
     elapsed = time.clock()-start
-    print(elapsed)
+    #print(elapsed)
     res = np.divide(df,h)
     return res
-    
+
 """
 Gradient descent : (much) faster than  simulated annealing.
 """
@@ -106,17 +103,16 @@ nonLateral = np.random.rand(int(len(organo.edge_df.line_tension)/2))*0.001
 lateral = np.random.rand(int(len(organo.edge_df.line_tension)/4))*0.001
 lateral = np.concatenate([lateral,np.roll(lateral,-1)])
 L = np.concatenate([nonLateral, lateral])
-D, startOrgano = distance(L, organo)
+D= distance(L)
 
 previousStepSize = 10**6
 cpt = 0
 incumbent = 10**6
 
 while previousStepSize > 10**(-5) and incumbent > 0:
-    print(startOrgano.edge_df.line_tension)
     cpt += 1
-    L = np.maximum(L - 0.01/cpt * grad(L,D,startOrgano),np.zeros(len(L)))    
-    D, startOrgano = distance(L, startOrgano)
+    L = np.maximum(L - 0.01/cpt * grad(L,D),np.zeros(len(L)))    
+    D = distance(L)
     previousStepSize = abs(D - incumbent)
     #print(f'Itération : {cpt-1} \n Distance : {D}')
     incumbent = D
