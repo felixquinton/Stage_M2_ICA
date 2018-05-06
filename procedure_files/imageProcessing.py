@@ -133,13 +133,12 @@ def membraneExtraction(img):
 
 def nucleiDetection(img):
     img_blu = isolate_color(img,[255, 0, 0])
-    blu_cont, blu_hier = find_contours(img_blu,0)
     ellipses = fitEllipse(img_blu,0,0)
     centers = [ellipses[i][0] for i in ellipses]
 
     return ellipses, centers
 
-class dataImg:
+class dataFakeImg:
     
     def __init__(self, path):
         
@@ -150,7 +149,6 @@ class dataImg:
         """
         red pixels = membrane
         """
-        
         membraneData = membraneExtraction(img)
         
         #saving useful data on the membrane
@@ -184,4 +182,59 @@ class dataImg:
         
         self.clockwiseCenters = np.array([[(clockwiseCenters[i][0]-self.shape[0]/2.0)/self.shape[0],(clockwiseCenters[i][1]-self.shape[1]/2.0)/self.shape[1]] for i in range(len(clockwiseCenters))])
 
-  
+class dataImage:
+    
+    def __init__(self, brigthfield_path, dapi_path):
+        
+        self.brigthfield = cv.imread(brigthfield_path,cv.IMREAD_GRAYSCALE)
+        self.dapi = cv.imread(dapi_path)
+        self.shape = self.dapi.shape
+        
+    def brightfield_processing(self):
+        
+        img = self.brigthfield.copy()
+        
+        ret,img = cv.threshold(img,28,255,0)
+
+        img = cv.GaussianBlur(img,(9,9),0)
+        
+        img, contours, hierarchy = cv.findContours(img,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+        
+        contours_length = [(len(contours[i]),i) for i in range(len(contours))]
+        contours_length.sort()
+        membrane_ind = contours_length[len(contours_length)-2:]
+        
+        inside, outside = [contours[ind[1]] for ind in membrane_ind]       
+        
+        (self.o_x, self.o_y), self.rOut = cv.minEnclosingCircle(outside)
+        (self.i_x, self.i_y), self.rIn = cv.minEnclosingCircle(inside) 
+        
+        inside = (inside - np.ones(inside.shape)*(img.shape[0]/2.0,img.shape[1]/2.0))/float(img.shape[0])
+        outside = (outside - np.ones(outside.shape)*(img.shape[0]/2.0,img.shape[1]/2.0))/float(img.shape[0])
+            
+        self.inside = np.squeeze(inside)
+        self.outside = np.squeeze(outside)
+        
+        
+    def dapi_processing(self):  
+        
+        img = self.dapi.copy()
+        
+        ret,img = cv.threshold(img,8,255,0)
+        
+        #saving useful data on the nuclei
+        
+        self.ellipses = fitEllipse(img,0,0)
+        
+        centers = [self.ellipses[i][0] for i in self.ellipses]
+        
+        #for each cell defined by its center, compute its closest clockwise neighbor   
+        neighbors = cpF.findNeighbor(centers, (self.o_x,self.o_y))
+        
+                #we need the list of cell nuclei to be clockwise ordered
+        clockwiseCenters = [neighbors[centers[0]]]
+        for i in centers[0:len(centers)-1] :
+            tmp = clockwiseCenters[len(clockwiseCenters)-1]
+            clockwiseCenters.append(neighbors[tmp])
+        
+        self.clockwiseCenters = np.array([[(clockwiseCenters[i][0]-self.shape[0]/2.0)/self.shape[0],(clockwiseCenters[i][1]-self.shape[1]/2.0)/self.shape[1]] for i in range(len(clockwiseCenters))])

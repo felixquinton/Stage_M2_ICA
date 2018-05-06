@@ -142,3 +142,17 @@ def generate_ring(Nf, R_in, R_out, R_vit=None, apical='in'):
                 'face': face_df}
     return AnnularSheet('ring', datasets,specs, coords=['x', 'y'])
 
+def make_noisy_ring(radius, noise_amp, n_points=256):
+    if not n_points == 256 : 
+        noise = np.random.rand(n_points)*0.2
+        thetas = np.linspace(0, 2*np.pi, n_points, endpoint=False)+noise
+    else : thetas = np.linspace(0, 2*np.pi, n_points, endpoint=False)
+    noise = np.random.normal(scale=noise_amp, size=(n_points)).cumsum()
+    noise *= np.sin(thetas/2)
+    radius = radius + noise
+    points = radius * np.vstack((np.cos(thetas), np.sin(thetas)))
+    # recenter
+    points -= points.mean(axis=1)[:, np.newaxis]
+
+    # we transpose the result to have one coordinate pair per line
+    return points.T

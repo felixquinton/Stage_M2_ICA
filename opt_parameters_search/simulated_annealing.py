@@ -9,7 +9,8 @@ Created on Wed Apr 11 16:54:49 2018
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-sys.path.insert(0, '../')
+sys.path.insert(0, '../procedure_files')
+
 
 #from tyssue.generation import generate_ring
 from tyssue import PlanarGeometry
@@ -111,8 +112,8 @@ class Etat:
         self.vecteur = []
 
     def init_aleatoire(self):
-        nonLateral = np.random.randint(1,10,int(DIMENSION/2))*0.001
-        lateral = np.random.randint(1,10,int(DIMENSION/4))*0.001
+        nonLateral = np.random.randint(1,10,int(DIMENSION/2))*0.0001
+        lateral = np.random.randint(1,10,int(DIMENSION/4))*0.0001
         lateral = np.concatenate([lateral,np.roll(lateral,-1)])
         self.vecteur = np.concatenate([nonLateral, lateral])
         pass
