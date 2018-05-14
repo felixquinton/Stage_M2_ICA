@@ -9,7 +9,7 @@ Created on Wed Apr 25 16:07:34 2018
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-sys.path.insert(0, './procedure_files')
+sys.path.insert(0, '../procedure_files')
 
 #from tyssue.generation import generate_ring
 from tyssue import PlanarGeometry
@@ -19,31 +19,101 @@ import tyssueMissing
 from tyssue.solvers.sheet_vertex_solver import Solver as solver
 import time
 from scipy import optimize as opt
+from tyssue.dynamics import units
+
+
+class AnnularGeometry(PlanarGeometry):
+
+    @classmethod
+    def update_all(cls, eptm):
+        PlanarGeometry.update_all(eptm)
+        cls.update_lumen_volume(eptm)
+
+    @staticmethod
+    def update_lumen_volume(eptm):
+        srce_pos = eptm.upcast_srce(eptm.vert_df[['x', 'y']]).loc[eptm.apical_edges]
+        trgt_pos = eptm.upcast_trgt(eptm.vert_df[['x', 'y']]).loc[eptm.apical_edges]
+        apical_edge_pos = (srce_pos + trgt_pos)/2
+        apical_edge_coords = eptm.edge_df.loc[eptm.apical_edges,
+                                              ['dx', 'dy']]
+        eptm.settings['lumen_volume'] = (
+            - apical_edge_pos['x'] * apical_edge_coords['dy']
+            + apical_edge_pos['y'] * apical_edge_coords['dx']).values.sum()
+
+
+class LumenElasticity(effectors.AbstractEffector):
+    '''
+
+    .. math:: \frac{K_Y}{2}(A_{\mathrm{lumen}} - A_{0,\mathrm{lumen}})^2
+
+    '''
+    dimensions = units.area_elasticity
+    label = 'Lumen volume constraint'
+    magnitude = 'lumen_elasticity'
+    element = 'settings'
+    spatial_ref = 'lumen_prefered_vol', units.area
+
+    specs = {
+        'settings': {
+            'lumen_elasticity',
+            'lumen_prefered_vol',
+            'lumen_volume'
+            }
+        }
+
+    @staticmethod
+    def energy(eptm):
+
+
+        Ky = eptm.settings['lumen_elasticity']
+        V0 = eptm.settings['lumen_prefered_vol']
+        Vy = eptm.settings['lumen_volume']
+        return np.array([Ky * (Vy - V0)**2 / 2,])
+
+    @staticmethod
+    def gradient(eptm):
+        Ky = eptm.settings['lumen_elasticity']
+        V0 = eptm.settings['lumen_prefered_vol']
+        Vy = eptm.settings['lumen_volume']
+        grad_srce, grad_trgt = lumen_area_grad(eptm)
+        return (Ky*(Vy - V0) * grad_srce,
+                Ky*(Vy - V0) * grad_trgt)
+
+
+def lumen_area_grad(eptm):
+    apical_pos = eptm.vert_df[['x', 'y']].copy()
+    apical_pos.loc[eptm.apical_verts] = 0
+    srce_pos = eptm.upcast_srce(apical_pos)
+    trgt_pos = eptm.upcast_trgt(apical_pos)
+    grad_srce = srce_pos.copy()
+    grad_srce.columns = ['gx', 'gy']
+    grad_trgt = grad_srce.copy()
+    grad_srce['gx'] = trgt_pos['y']
+    grad_srce['gy'] = -trgt_pos['x']
+    grad_trgt['gx'] = -srce_pos['y']
+    grad_trgt['gy'] = srce_pos['x']
+    # minus sign due to the backward orientation
+    return -grad_srce, -grad_trgt
+
+
 
 
 #defining de organoid using the data we saved above
 Nf = 6
 R_in = 0.5
 R_out = 1
-inners = tyssueMissing.make_noisy_ring(R_in, 0.01)
-outers = tyssueMissing.make_noisy_ring(R_out, 0.01)
-org_center = (0,0)
-centers = tyssueMissing.make_noisy_ring((R_in+R_out)/2, 0.01, Nf)
-#compute the vertices of the mesh
-inner_vs, outer_vs = cpF.get_bissecting_vertices(centers, inners, outers, org_center)
 
 #initialising the mesh
 organo = tyssueMissing.generate_ring(Nf, R_in, R_out)
 
 # adjustement
-organo.vert_df.loc[organo.apical_verts, organo.coords] = inner_vs[::-1]
-organo.vert_df.loc[organo.basal_verts, organo.coords] = outer_vs[::-1]
+AnnularGeometry.update_all(organo)
 
-PlanarGeometry.update_all(organo)
 
 # Construction of the model
 model = factory.model_factory(
-    [effectors.FaceAreaElasticity,
+    [LumenElasticity,
+     effectors.FaceAreaElasticity,
      effectors.LineTension],
     effectors.FaceAreaElasticity)
 
@@ -53,7 +123,7 @@ specs = {
         'is_alive': 1,
         'prefered_area': organo.face_df.area.mean(), #and there was an error here
         'area_elasticity': 1,},
-    'edge':{        
+    'edge':{
         'ux': 0.,
         'uy': 0.,
         'uz': 0.,
@@ -63,6 +133,11 @@ specs = {
     'vert':{
         'is_active': 1
         },
+    'settings': {
+        'lumen_elasticity': 10,
+        'lumen_prefered_vol': organo.settings['lumen_volume'],
+        'lumen_volume': organo.settings['lumen_volume']
+        }
     }
 
 minimize_opt = {'options':{'gtol':0.00001,
@@ -82,15 +157,15 @@ organo.edge_df.line_tension = startL
 organo.face_df.prefered_area = startA
 
 solver.find_energy_min(organo,
-                            PlanarGeometry,
-                            model,
-                            minimize = minimize_opt)
+                       AnnularGeometry,
+                       model,
+                       minimize = minimize_opt)
+
 energy = model.compute_energy(organo)
 print(f'Computed enregy: {energy:.3f}')
 # Plot of the mesh
 fig, ax = plt.subplots()
-ax.plot(*inners.T, lw=1, alpha=0.6, c='gray')
-ax.plot(*outers.T, lw=1, alpha=0.6, c='gray')
+
 fig, ax = tyssueMissing.quick_edge_drawMod(organo, ax=ax)
 
 plt.title('With true parameters')
@@ -98,14 +173,14 @@ Y = np.column_stack([organo.vert_df.x, organo.vert_df.y])
 
 
 
-def distance(P):   
+def distance(P):
     L, A = P[:4*Nf], P[4*Nf:]
     tmpOrgano = organo.copy()
     tmpOrgano.edge_df.line_tension = L
     tmpOrgano.face_df.prefered_area = A
     #start = time.clock()
     solver.find_energy_min(tmpOrgano,
-                            PlanarGeometry,
+                            AnnularGeometry,
                             model,
                             minimize = minimize_opt)
     X = np.column_stack([tmpOrgano.vert_df.x, tmpOrgano.vert_df.y])
@@ -118,7 +193,7 @@ def distance(P):
     D = np.sum(N)
     return D
 
-#scipy approx_fprime is slower because it compute the partial derivatice twice for lateral edges 
+#scipy approx_fprime is slower because it compute the partial derivatice twice for lateral edges
 def grad(P,D):
     h = np.array([10**(-6)]*len(P))
     hP = np.tile(P,(len(P),1)) + np.eye(len(P))*10**(-6)
@@ -131,6 +206,9 @@ def grad(P,D):
     print('gradient computation : ', round(elapsed,4))
     res = np.divide(df,h)
     return res
+
+
+
 
 """
 Gradient descent : (much) faster than  simulated annealing.
@@ -152,8 +230,8 @@ incumbent = D
 
 while previousStepSize > 10**(-5) and incumbent > 0.001:
     cpt += 1
-    #L = np.maximum(L - 0.01/cpt * opt.approx_fprime(L, distance,10**(-6)),np.zeros(len(L)))    
-    P = np.maximum(P - 0.01 / cpt * grad(P,D),np.zeros(len(P)))    
+    #L = np.maximum(L - 0.01/cpt * opt.approx_fprime(L, distance,10**(-6)),np.zeros(len(L)))
+    P = np.maximum(P - 0.01 / cpt * grad(P,D),np.zeros(len(P)))
     D = distance(P)
     previousStepSize = abs(D - incumbent)
     print(f'Itération : {cpt-1} \n Distance : {round(D,5)}')
@@ -165,21 +243,17 @@ elapsed = time.clock()-start
 organo.edge_df.line_tension = optL
 organo.face_df.prefered_area = optA
 solver.find_energy_min(organo,
-                            PlanarGeometry,
-                            model,
-                            minimize = minimize_opt)
+                       AnnularGeometry,
+                       model,
+                       minimize = minimize_opt)
 
 
 energy = model.compute_energy(organo)
 print(f'Computed enregy: {energy:.3f}')
 # Plot of the mesh
 fig, ax = plt.subplots()
-ax.plot(*inners.T, lw=1, alpha=0.6, c='gray')
-ax.plot(*outers.T, lw=1, alpha=0.6, c='gray')
 fig, ax = tyssueMissing.quick_edge_drawMod(organo, ax=ax)
 
 ax.set(aspect='equal')
 plt.title('With random starting parameters')
 print('Solving time =',elapsed)
-
-
